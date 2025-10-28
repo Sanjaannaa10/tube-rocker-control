@@ -303,16 +303,24 @@
                 return;
             }
 
+            // Check if running on GitHub Pages
+            if (window.location.hostname.includes('github.io')) {
+                showMessage('⚠️ Status check not available on GitHub Pages (browser security). But ON/OFF commands still work!', 'error');
+                updateStatus('unknown');
+                return;
+            }
+
             const url = `http://${espIP}/status`;
             
             fetch(url)
                 .then(response => response.json())
                 .then(data => {
                     updateStatus(data.status);
+                    showMessage('Status retrieved successfully!', 'success');
                 })
                 .catch(error => {
                     updateStatus('unknown');
-                    showMessage('Cannot retrieve status from ESP32', 'error');
+                    showMessage('Cannot retrieve status. Make sure ESP32 is online and on same network.', 'error');
                     console.error('Error:', error);
                 });
         }

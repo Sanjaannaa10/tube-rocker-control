@@ -2,31 +2,41 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>ESP32 MQTT Control</title>
+  <title>ESP32 Global Control</title>
   <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
   <style>
-    body { font-family: Arial; text-align: center; margin-top: 50px; }
-    button { padding: 15px 30px; margin: 10px; font-size: 20px; }
+    body { text-align: center; font-family: Arial; margin-top: 50px; }
+    button { padding: 15px 30px; font-size: 20px; margin: 10px; }
+    #status { margin-top: 20px; font-weight: bold; }
   </style>
 </head>
 <body>
-  <h1>ESP32 LED via MQTT</h1>
-  <button onclick="publish('on')">Turn ON</button>
-  <button onclick="publish('off')">Turn OFF</button>
-  <p id="status">Connecting...</p>
+  <h1>🌍 Control ESP32 from Anywhere</h1>
+  <button onclick="publish('on')">LED ON</button>
+  <button onclick="publish('off')">LED OFF</button>
+  <p id="status">Connecting to MQTT broker...</p>
 
   <script>
-    const broker = "wss://broker.hivemq.com:8884/mqtt";
-    const topic = "esp32/led";
-    const client = mqtt.connect(broker);
+    // ✅ Use same topic as ESP32
+    const broker = "wss://broker.hivemq.com:8884/mqtt";  // WebSocket connection to HiveMQ broker
+    const topic = "yourname/esp32/led";                   // must match ESP32 topic
+    const clientId = "web_client_" + Math.random().toString(16).substr(2, 8);
+
+    // Connect to broker
+    const client = mqtt.connect(broker, { clientId });
 
     client.on("connect", () => {
-      document.getElementById("status").innerText = "Connected to broker!";
+      document.getElementById("status").innerText = "✅ Connected to MQTT broker!";
+      client.subscribe(topic);
     });
 
-    function publish(msg) {
-      client.publish(topic, msg);
-      document.getElementById("status").innerText = "Sent: " + msg;
+    client.on("message", (t, msg) => {
+      document.getElementById("status").innerText = "Message from ESP32: " + msg;
+    });
+
+    function publish(message) {
+      client.publish(topic, message);
+      document.getElementById("status").innerText = "Sent: " + message;
     }
   </script>
 </body>

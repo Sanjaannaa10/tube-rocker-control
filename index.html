@@ -56,6 +56,11 @@
             color: #721c24;
         }
         
+        .status.connecting {
+            background: #fff3cd;
+            color: #856404;
+        }
+        
         .control-group {
             margin-bottom: 25px;
         }
@@ -124,12 +129,18 @@
             box-shadow: 0 5px 15px rgba(0,0,0,0.2);
         }
         
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
         .btn-start {
             background: #28a745;
             color: white;
         }
         
-        .btn-start:hover {
+        .btn-start:hover:not(:disabled) {
             background: #218838;
         }
         
@@ -138,7 +149,7 @@
             color: white;
         }
         
-        .btn-stop:hover {
+        .btn-stop:hover:not(:disabled) {
             background: #c82333;
         }
         
@@ -148,7 +159,7 @@
             grid-column: 1 / -1;
         }
         
-        .btn-apply:hover {
+        .btn-apply:hover:not(:disabled) {
             background: #5568d3;
         }
         
@@ -177,6 +188,13 @@
         .log-entry:last-child {
             border-bottom: none;
         }
+        
+        .broker-info {
+            font-size: 11px;
+            color: #999;
+            text-align: center;
+            margin-top: 10px;
+        }
     </style>
 </head>
 <body>
@@ -200,21 +218,23 @@
         </div>
         
         <div class="button-group">
-            <button class="btn-start" onclick="sendCommand('START')">▶ Start</button>
-            <button class="btn-stop" onclick="sendCommand('STOP')">⏹ Stop</button>
-            <button class="btn-apply" onclick="applySettings()">Apply Settings</button>
+            <button class="btn-start" id="btnStart" onclick="sendCommand('START')" disabled>▶ Start</button>
+            <button class="btn-stop" id="btnStop" onclick="sendCommand('STOP')" disabled>⏹ Stop</button>
+            <button class="btn-apply" id="btnApply" onclick="applySettings()" disabled>Apply Settings</button>
         </div>
         
         <div class="log">
             <div class="log-title">Activity Log</div>
             <div id="logContainer"></div>
         </div>
+        
+        <div class="broker-info">Using: test.mosquitto.org</div>
     </div>
 
     <script>
-        // MQTT Configuration - CHANGE THESE!
-        const MQTT_BROKER = "test.mosquitto.org";  // Free public broker for testing
-        const MQTT_PORT = 8081;  // WebSocket port
+        // MQTT Configuration - Using Mosquitto test broker
+        const MQTT_BROKER = "test.mosquitto.org";
+        const MQTT_PORT = 8081;  // WebSocket port (ws://)
         const CLIENT_ID = "webClient_" + Math.random().toString(16).substr(2, 8);
         
         // Topics
@@ -224,6 +244,8 @@
         
         let client;
         let isConnected = false;
+        let reconnectAttempts = 0;
+        const MAX_RECONNECT_ATTEMPTS = 10;
         
         // Update value displays
         document.getElementById('speed').oninput = function() {
@@ -237,77 +259,113 @@
         // Connect to MQTT broker
         function connectMQTT() {
             addLog("Connecting to MQTT broker...");
+            updateStatus('connecting');
             
-            client = new Paho.MQTT.Client(MQTT_BROKER, MQTT_PORT, CLIENT_ID);
-            
-            client.onConnectionLost = onConnectionLost;
-            client.onMessageArrived = onMessageArrived;
-            
-            client.connect({
-                onSuccess: onConnect,
-                onFailure: onFailure
-            });
+            try {
+                client = new Paho.MQTT.Client(MQTT_BROKER, MQTT_PORT, CLIENT_ID);
+                
+                client.onConnectionLost = onConnectionLost;
+                client.onMessageArrived = onMessageArrived;
+                
+                const connectOptions = {
+                    timeout: 10,
+                    onSuccess: onConnect,
+                    onFailure: onFailure,
+                    keepAliveInterval: 30,
+                    cleanSession: true
+                };
+                
+                client.connect(connectOptions);
+                
+            } catch (error) {
+                addLog("Error creating client: " + error.message);
+                updateStatus('disconnected');
+                scheduleReconnect();
+            }
         }
         
         function onConnect() {
             isConnected = true;
-            updateStatus(true);
-            addLog("Connected to MQTT broker");
+            reconnectAttempts = 0;
+            updateStatus('connected');
+            enableButtons(true);
+            addLog("✓ Connected to MQTT broker");
             
             // Subscribe to status topic
-            client.subscribe(TOPIC_STATUS);
-            addLog("Subscribed to: " + TOPIC_STATUS);
+            try {
+                client.subscribe(TOPIC_STATUS);
+                addLog("✓ Subscribed to: " + TOPIC_STATUS);
+            } catch (error) {
+                addLog("Subscribe error: " + error.message);
+            }
         }
         
         function onFailure(message) {
             isConnected = false;
-            updateStatus(false);
-            addLog("Connection failed: " + message.errorMessage);
+            updateStatus('disconnected');
+            enableButtons(false);
             
-            // Retry after 5 seconds
-            setTimeout(connectMQTT, 5000);
+            const errorMsg = message.errorMessage || "Unknown error";
+            addLog("✗ Connection failed: " + errorMsg);
+            
+            scheduleReconnect();
         }
         
         function onConnectionLost(responseObject) {
             isConnected = false;
-            updateStatus(false);
+            updateStatus('disconnected');
+            enableButtons(false);
             
             if (responseObject.errorCode !== 0) {
-                addLog("Connection lost: " + responseObject.errorMessage);
+                addLog("✗ Connection lost: " + responseObject.errorMessage);
             }
             
-            // Retry connection
-            setTimeout(connectMQTT, 5000);
+            scheduleReconnect();
+        }
+        
+        function scheduleReconnect() {
+            if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
+                reconnectAttempts++;
+                const delay = Math.min(5000 * reconnectAttempts, 30000);
+                addLog("Reconnecting in " + (delay/1000) + " seconds... (Attempt " + reconnectAttempts + "/" + MAX_RECONNECT_ATTEMPTS + ")");
+                setTimeout(connectMQTT, delay);
+            } else {
+                addLog("Max reconnection attempts reached. Please refresh the page.");
+            }
         }
         
         function onMessageArrived(message) {
             const topic = message.destinationName;
             const payload = message.payloadString;
             
-            addLog("Received: " + topic + " = " + payload);
+            addLog("◄ Received: " + topic + " = " + payload);
             
             if (topic === TOPIC_STATUS) {
-                // Handle status updates from ESP32
                 addLog("Device status: " + payload);
             }
         }
         
         function sendCommand(command) {
             if (!isConnected) {
-                addLog("Not connected! Cannot send command.");
+                addLog("✗ Not connected! Cannot send command.");
                 return;
             }
             
-            const message = new Paho.MQTT.Message(command);
-            message.destinationName = TOPIC_COMMAND;
-            client.send(message);
-            
-            addLog("Sent command: " + command);
+            try {
+                const message = new Paho.MQTT.Message(command);
+                message.destinationName = TOPIC_COMMAND;
+                message.qos = 0;
+                client.send(message);
+                
+                addLog("► Sent command: " + command);
+            } catch (error) {
+                addLog("✗ Send error: " + error.message);
+            }
         }
         
         function applySettings() {
             if (!isConnected) {
-                addLog("Not connected! Cannot apply settings.");
+                addLog("✗ Not connected! Cannot apply settings.");
                 return;
             }
             
@@ -319,22 +377,36 @@
                 angle: parseInt(angle)
             };
             
-            const message = new Paho.MQTT.Message(JSON.stringify(settings));
-            message.destinationName = TOPIC_SETTINGS;
-            client.send(message);
-            
-            addLog("Applied settings: Speed=" + speed + ", Angle=" + angle);
+            try {
+                const message = new Paho.MQTT.Message(JSON.stringify(settings));
+                message.destinationName = TOPIC_SETTINGS;
+                message.qos = 0;
+                client.send(message);
+                
+                addLog("► Applied settings: Speed=" + speed + ", Angle=" + angle);
+            } catch (error) {
+                addLog("✗ Send error: " + error.message);
+            }
         }
         
-        function updateStatus(connected) {
+        function updateStatus(status) {
             const statusDiv = document.getElementById('status');
-            if (connected) {
+            if (status === 'connected') {
                 statusDiv.textContent = '✓ Connected';
                 statusDiv.className = 'status connected';
+            } else if (status === 'connecting') {
+                statusDiv.textContent = '⟳ Connecting...';
+                statusDiv.className = 'status connecting';
             } else {
                 statusDiv.textContent = '✗ Disconnected';
                 statusDiv.className = 'status disconnected';
             }
+        }
+        
+        function enableButtons(enabled) {
+            document.getElementById('btnStart').disabled = !enabled;
+            document.getElementById('btnStop').disabled = !enabled;
+            document.getElementById('btnApply').disabled = !enabled;
         }
         
         function addLog(message) {
@@ -353,13 +425,17 @@
         
         // Connect on page load
         window.onload = function() {
-            connectMQTT();
+            addLog("Page loaded. Initializing...");
+            enableButtons(false);
+            setTimeout(connectMQTT, 500);
+        };
+        
+        // Disconnect gracefully on page unload
+        window.onbeforeunload = function() {
+            if (isConnected && client) {
+                client.disconnect();
+            }
         };
     </script>
 </body>
 </html>
-
-
-
-
-

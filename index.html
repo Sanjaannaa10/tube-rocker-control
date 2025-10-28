@@ -3,8 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ESP32 LED Controller</title>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
+    <title>ESP32 Controller</title>
     <style>
         * {
             margin: 0;
@@ -24,8 +23,8 @@
         
         .container {
             background: white;
-            border-radius: 20px;
             padding: 40px;
+            border-radius: 20px;
             box-shadow: 0 20px 60px rgba(0,0,0,0.3);
             max-width: 400px;
             width: 100%;
@@ -38,67 +37,108 @@
             font-size: 28px;
         }
         
-        .status {
+        .subtitle {
             text-align: center;
-            padding: 10px;
-            border-radius: 10px;
-            margin: 20px 0;
-            font-weight: bold;
+            color: #666;
+            margin-bottom: 30px;
             font-size: 14px;
         }
         
-        .status.connected {
-            background: #d4edda;
-            color: #155724;
+        .config-section {
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
         }
         
-        .status.disconnected {
-            background: #f8d7da;
-            color: #721c24;
+        .input-group {
+            margin-bottom: 15px;
         }
         
-        .status.connecting {
-            background: #fff3cd;
-            color: #856404;
+        label {
+            display: block;
+            margin-bottom: 5px;
+            color: #555;
+            font-weight: 500;
+            font-size: 14px;
         }
         
-        .led-display {
-            width: 150px;
-            height: 150px;
-            border-radius: 50%;
-            margin: 30px auto;
-            border: 5px solid #ddd;
-            transition: all 0.3s ease;
-            box-shadow: 0 0 20px rgba(0,0,0,0.1);
+        input {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
         }
         
-        .led-display.on {
-            background: #ffd700;
-            border-color: #ffed4e;
-            box-shadow: 0 0 40px rgba(255, 215, 0, 0.8);
+        input:focus {
+            outline: none;
+            border-color: #667eea;
         }
         
-        .led-display.off {
-            background: #555;
-            border-color: #333;
+        .save-btn {
+            width: 100%;
+            padding: 12px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            transition: background 0.3s;
+            margin-top: 10px;
+        }
+        
+        .save-btn:hover {
+            background: #5568d3;
+        }
+        
+        .status {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        
+        .status-badge {
+            display: inline-block;
+            padding: 10px 25px;
+            border-radius: 25px;
+            font-weight: bold;
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+        
+        .status-on {
+            background: #4caf50;
+            color: white;
+        }
+        
+        .status-off {
+            background: #f44336;
+            color: white;
+        }
+        
+        .status-unknown {
+            background: #9e9e9e;
+            color: white;
         }
         
         .controls {
-            display: flex;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
             gap: 15px;
-            margin-top: 30px;
+            margin-bottom: 20px;
         }
         
         button {
-            flex: 1;
-            padding: 15px;
+            padding: 20px;
             font-size: 18px;
             font-weight: bold;
             border: none;
-            border-radius: 10px;
+            border-radius: 12px;
             cursor: pointer;
-            transition: all 0.3s ease;
-            text-transform: uppercase;
+            transition: all 0.3s;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.2);
         }
         
         button:active {
@@ -106,190 +146,203 @@
         }
         
         .btn-on {
-            background: #28a745;
+            background: #4caf50;
             color: white;
         }
         
         .btn-on:hover {
-            background: #218838;
+            background: #45a049;
+            box-shadow: 0 6px 20px rgba(76, 175, 80, 0.4);
         }
         
         .btn-off {
-            background: #dc3545;
+            background: #f44336;
             color: white;
         }
         
         .btn-off:hover {
-            background: #c82333;
-        }
-        
-        .messages {
-            margin-top: 20px;
-            padding: 15px;
-            background: #f8f9fa;
-            border-radius: 10px;
-            max-height: 150px;
-            overflow-y: auto;
+            background: #da190b;
+            box-shadow: 0 6px 20px rgba(244, 67, 54, 0.4);
         }
         
         .message {
-            font-size: 12px;
-            color: #666;
-            padding: 5px 0;
-            border-bottom: 1px solid #e0e0e0;
+            text-align: center;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-weight: 500;
+            display: none;
         }
         
-        .message:last-child {
-            border-bottom: none;
+        .message.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
         }
         
-        .message-time {
+        .message.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        
+        .info {
+            background: #e3f2fd;
+            padding: 15px;
+            border-radius: 8px;
+            margin-top: 20px;
+            font-size: 13px;
+            color: #1565c0;
+            border-left: 4px solid #2196f3;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 30px;
             color: #999;
-            font-size: 10px;
+            font-size: 12px;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🔌 ESP32 LED Control</h1>
+        <h1>🔌 ESP32 Controller</h1>
+        <p class="subtitle">Control Pin 3 Remotely</p>
         
-        <div id="status" class="status connecting">
-            Connecting to MQTT...
+        <div class="config-section">
+            <h3 style="margin-bottom: 15px; color: #333;">⚙️ ESP32 Configuration</h3>
+            <div class="input-group">
+                <label for="esp-ip">ESP32 IP Address:</label>
+                <input type="text" id="esp-ip" placeholder="192.168.1.100" />
+            </div>
+            <button class="save-btn" onclick="saveConfig()">💾 Save Configuration</button>
         </div>
         
-        <div id="led" class="led-display off"></div>
+        <div class="status">
+            <div class="status-badge status-unknown" id="status-badge">UNKNOWN</div>
+            <div style="color: #666; font-size: 14px;">Current Status</div>
+        </div>
         
         <div class="controls">
-            <button class="btn-on" onclick="sendCommand('ON')">Turn ON</button>
-            <button class="btn-off" onclick="sendCommand('OFF')">Turn OFF</button>
+            <button class="btn-on" onclick="sendCommand('on')">
+                ⚡ TURN ON
+            </button>
+            <button class="btn-off" onclick="sendCommand('off')">
+                🔴 TURN OFF
+            </button>
         </div>
         
-        <div class="messages" id="messages">
-            <div class="message">Waiting for messages...</div>
+        <button onclick="getStatus()" style="width: 100%; background: #2196f3; color: white;">
+            🔄 Refresh Status
+        </button>
+        
+        <div class="message" id="message"></div>
+        
+        <div class="info">
+            <strong>📌 Setup Instructions:</strong><br>
+            1. Upload code to ESP32 via Thonny<br>
+            2. Note the IP address from Serial Monitor<br>
+            3. Enter IP address above and click Save<br>
+            4. Make sure you're on the same WiFi network
+        </div>
+        
+        <div class="footer">
+            Powered by ESP32 & MicroPython
         </div>
     </div>
 
     <script>
-        // MQTT Configuration
-        const MQTT_BROKER = "broker.hivemq.com";
-        const MQTT_PORT = 8000; // WebSocket port
-        const MQTT_TOPIC_PUB = "esp32/control";
-        const MQTT_TOPIC_SUB = "esp32/data";
-        
-        let client;
-        let ledState = false;
-        
-        // Generate random client ID
-        const clientId = "web_client_" + Math.random().toString(16).substr(2, 8);
-        
-        // Create MQTT client
-        client = new Paho.MQTT.Client(MQTT_BROKER, MQTT_PORT, clientId);
-        
-        // Set callback handlers
-        client.onConnectionLost = onConnectionLost;
-        client.onMessageArrived = onMessageArrived;
-        
-        // Connect to MQTT broker
-        function connectMQTT() {
-            updateStatus("Connecting to MQTT...", "connecting");
-            
-            client.connect({
-                onSuccess: onConnect,
-                onFailure: onFailure,
-                useSSL: false
-            });
-        }
-        
-        // Connection successful
-        function onConnect() {
-            console.log("Connected to MQTT broker");
-            updateStatus("Connected to MQTT Broker", "connected");
-            
-            // Subscribe to ESP32 data topic
-            client.subscribe(MQTT_TOPIC_SUB);
-            addMessage("Subscribed to " + MQTT_TOPIC_SUB);
-        }
-        
-        // Connection failed
-        function onFailure(message) {
-            console.log("Connection failed: " + message.errorMessage);
-            updateStatus("Connection Failed. Retrying...", "disconnected");
-            setTimeout(connectMQTT, 3000);
-        }
-        
-        // Connection lost
-        function onConnectionLost(responseObject) {
-            if (responseObject.errorCode !== 0) {
-                console.log("Connection lost: " + responseObject.errorMessage);
-                updateStatus("Connection Lost. Reconnecting...", "disconnected");
-                setTimeout(connectMQTT, 3000);
+        const CONFIG_KEY = 'esp32_ip';
+        let espIP = '';
+
+        // Load saved configuration on page load
+        window.onload = function() {
+            const savedIP = localStorage.getItem(CONFIG_KEY);
+            if (savedIP) {
+                espIP = savedIP;
+                document.getElementById('esp-ip').value = savedIP;
+                showMessage('Configuration loaded!', 'success');
+                getStatus();
             }
-        }
-        
-        // Message received
-        function onMessageArrived(message) {
-            console.log("Message received: " + message.payloadString);
-            addMessage("Received: " + message.payloadString);
-        }
-        
-        // Send command to ESP32
-        function sendCommand(command) {
-            if (!client.isConnected()) {
-                alert("Not connected to MQTT broker!");
+        };
+
+        function saveConfig() {
+            const ipInput = document.getElementById('esp-ip').value.trim();
+            if (!ipInput) {
+                showMessage('Please enter an IP address', 'error');
                 return;
             }
-            
-            const message = new Paho.MQTT.Message(command);
-            message.destinationName = MQTT_TOPIC_PUB;
-            client.send(message);
-            
-            // Update LED display
-            ledState = (command === "ON");
-            updateLED(ledState);
-            
-            addMessage("Sent: " + command);
+            espIP = ipInput;
+            localStorage.setItem(CONFIG_KEY, espIP);
+            showMessage('Configuration saved!', 'success');
+            getStatus();
         }
-        
-        // Update LED display
-        function updateLED(isOn) {
-            const led = document.getElementById("led");
-            if (isOn) {
-                led.classList.remove("off");
-                led.classList.add("on");
+
+        function sendCommand(command) {
+            if (!espIP) {
+                showMessage('Please configure ESP32 IP address first', 'error');
+                return;
+            }
+
+            const url = `http://${espIP}/${command}`;
+            
+            fetch(url, { mode: 'no-cors' })
+                .then(() => {
+                    showMessage(`Command "${command.toUpperCase()}" sent successfully!`, 'success');
+                    setTimeout(getStatus, 500);
+                })
+                .catch(error => {
+                    showMessage(`Error: Cannot connect to ESP32. Check IP address and network.`, 'error');
+                    console.error('Error:', error);
+                });
+        }
+
+        function getStatus() {
+            if (!espIP) {
+                showMessage('Please configure ESP32 IP address first', 'error');
+                return;
+            }
+
+            const url = `http://${espIP}/status`;
+            
+            fetch(url)
+                .then(response => response.json())
+                .then(data => {
+                    updateStatus(data.status);
+                })
+                .catch(error => {
+                    updateStatus('unknown');
+                    showMessage('Cannot retrieve status from ESP32', 'error');
+                    console.error('Error:', error);
+                });
+        }
+
+        function updateStatus(status) {
+            const badge = document.getElementById('status-badge');
+            badge.className = 'status-badge';
+            
+            if (status === 'on') {
+                badge.textContent = 'ON';
+                badge.classList.add('status-on');
+            } else if (status === 'off') {
+                badge.textContent = 'OFF';
+                badge.classList.add('status-off');
             } else {
-                led.classList.remove("on");
-                led.classList.add("off");
+                badge.textContent = 'UNKNOWN';
+                badge.classList.add('status-unknown');
             }
         }
-        
-        // Update status display
-        function updateStatus(text, state) {
-            const status = document.getElementById("status");
-            status.textContent = text;
-            status.className = "status " + state;
+
+        function showMessage(text, type) {
+            const message = document.getElementById('message');
+            message.textContent = text;
+            message.className = `message ${type}`;
+            message.style.display = 'block';
+            
+            setTimeout(() => {
+                message.style.display = 'none';
+            }, 4000);
         }
-        
-        // Add message to log
-        function addMessage(text) {
-            const messagesDiv = document.getElementById("messages");
-            const now = new Date();
-            const timeStr = now.toLocaleTimeString();
-            
-            const messageDiv = document.createElement("div");
-            messageDiv.className = "message";
-            messageDiv.innerHTML = `<span class="message-time">[${timeStr}]</span> ${text}`;
-            
-            messagesDiv.appendChild(messageDiv);
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
-            
-            // Keep only last 10 messages
-            while (messagesDiv.children.length > 10) {
-                messagesDiv.removeChild(messagesDiv.firstChild);
-            }
-        }
-        
-        // Connect on page load
-        connectMQTT();
     </script>
 </body>
 </html>

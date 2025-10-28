@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tube Rocker Control</title>
+    <title>ESP32 LED Controller</title>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/paho-mqtt/1.0.1/mqttws31.min.js"></script>
     <style>
         * {
@@ -25,25 +25,26 @@
         .container {
             background: white;
             border-radius: 20px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
             padding: 40px;
-            max-width: 500px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            max-width: 400px;
             width: 100%;
         }
         
         h1 {
+            text-align: center;
             color: #333;
             margin-bottom: 10px;
-            text-align: center;
+            font-size: 28px;
         }
         
         .status {
             text-align: center;
-            padding: 12px;
+            padding: 10px;
             border-radius: 10px;
-            margin-bottom: 30px;
+            margin: 20px 0;
             font-weight: bold;
-            transition: all 0.3s;
+            font-size: 14px;
         }
         
         .status.connected {
@@ -61,381 +62,234 @@
             color: #856404;
         }
         
-        .control-group {
-            margin-bottom: 25px;
-        }
-        
-        label {
-            display: block;
-            color: #555;
-            font-weight: 600;
-            margin-bottom: 8px;
-        }
-        
-        input[type="range"] {
-            width: 100%;
-            height: 8px;
-            border-radius: 5px;
-            background: #ddd;
-            outline: none;
-            margin-bottom: 5px;
-        }
-        
-        input[type="range"]::-webkit-slider-thumb {
-            appearance: none;
-            width: 20px;
-            height: 20px;
+        .led-display {
+            width: 150px;
+            height: 150px;
             border-radius: 50%;
-            background: #667eea;
-            cursor: pointer;
+            margin: 30px auto;
+            border: 5px solid #ddd;
+            transition: all 0.3s ease;
+            box-shadow: 0 0 20px rgba(0,0,0,0.1);
         }
         
-        input[type="range"]::-moz-range-thumb {
-            width: 20px;
-            height: 20px;
-            border-radius: 50%;
-            background: #667eea;
-            cursor: pointer;
-            border: none;
+        .led-display.on {
+            background: #ffd700;
+            border-color: #ffed4e;
+            box-shadow: 0 0 40px rgba(255, 215, 0, 0.8);
         }
         
-        .value-display {
-            text-align: center;
-            font-size: 24px;
-            color: #667eea;
-            font-weight: bold;
+        .led-display.off {
+            background: #555;
+            border-color: #333;
         }
         
-        .button-group {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
+        .controls {
+            display: flex;
             gap: 15px;
             margin-top: 30px;
         }
         
         button {
+            flex: 1;
             padding: 15px;
+            font-size: 18px;
+            font-weight: bold;
             border: none;
             border-radius: 10px;
-            font-size: 16px;
-            font-weight: bold;
             cursor: pointer;
-            transition: all 0.3s;
+            transition: all 0.3s ease;
             text-transform: uppercase;
         }
         
-        button:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+        button:active {
+            transform: scale(0.95);
         }
         
-        button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
-        }
-        
-        .btn-start {
+        .btn-on {
             background: #28a745;
             color: white;
         }
         
-        .btn-start:hover:not(:disabled) {
+        .btn-on:hover {
             background: #218838;
         }
         
-        .btn-stop {
+        .btn-off {
             background: #dc3545;
             color: white;
         }
         
-        .btn-stop:hover:not(:disabled) {
+        .btn-off:hover {
             background: #c82333;
         }
         
-        .btn-apply {
-            background: #667eea;
-            color: white;
-            grid-column: 1 / -1;
-        }
-        
-        .btn-apply:hover:not(:disabled) {
-            background: #5568d3;
-        }
-        
-        .log {
-            margin-top: 30px;
+        .messages {
+            margin-top: 20px;
             padding: 15px;
             background: #f8f9fa;
             border-radius: 10px;
-            max-height: 200px;
+            max-height: 150px;
             overflow-y: auto;
         }
         
-        .log-title {
-            font-weight: bold;
-            color: #555;
-            margin-bottom: 10px;
-        }
-        
-        .log-entry {
+        .message {
             font-size: 12px;
             color: #666;
             padding: 5px 0;
-            border-bottom: 1px solid #dee2e6;
+            border-bottom: 1px solid #e0e0e0;
         }
         
-        .log-entry:last-child {
+        .message:last-child {
             border-bottom: none;
         }
         
-        .broker-info {
-            font-size: 11px;
+        .message-time {
             color: #999;
-            text-align: center;
-            margin-top: 10px;
+            font-size: 10px;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>🧪 Tube Rocker Control</h1>
+        <h1>🔌 ESP32 LED Control</h1>
         
-        <div id="status" class="status disconnected">
-            Disconnected
+        <div id="status" class="status connecting">
+            Connecting to MQTT...
         </div>
         
-        <div class="control-group">
-            <label for="speed">Speed (RPM)</label>
-            <input type="range" id="speed" min="0" max="100" value="50">
-            <div class="value-display" id="speedValue">50</div>
+        <div id="led" class="led-display off"></div>
+        
+        <div class="controls">
+            <button class="btn-on" onclick="sendCommand('ON')">Turn ON</button>
+            <button class="btn-off" onclick="sendCommand('OFF')">Turn OFF</button>
         </div>
         
-        <div class="control-group">
-            <label for="angle">Angle (Degrees)</label>
-            <input type="range" id="angle" min="0" max="90" value="45">
-            <div class="value-display" id="angleValue">45°</div>
+        <div class="messages" id="messages">
+            <div class="message">Waiting for messages...</div>
         </div>
-        
-        <div class="button-group">
-            <button class="btn-start" id="btnStart" onclick="sendCommand('START')" disabled>▶ Start</button>
-            <button class="btn-stop" id="btnStop" onclick="sendCommand('STOP')" disabled>⏹ Stop</button>
-            <button class="btn-apply" id="btnApply" onclick="applySettings()" disabled>Apply Settings</button>
-        </div>
-        
-        <div class="log">
-            <div class="log-title">Activity Log</div>
-            <div id="logContainer"></div>
-        </div>
-        
-        <div class="broker-info">Using: test.mosquitto.org</div>
     </div>
 
     <script>
-        // MQTT Configuration - Using Mosquitto test broker
-        const MQTT_BROKER = "test.mosquitto.org";
-        const MQTT_PORT = 8081;  // WebSocket port (ws://)
-        const CLIENT_ID = "webClient_" + Math.random().toString(16).substr(2, 8);
-        
-        // Topics
-        const TOPIC_COMMAND = "lab/tubeRocker/command";
-        const TOPIC_STATUS = "lab/tubeRocker/status";
-        const TOPIC_SETTINGS = "lab/tubeRocker/settings";
+        // MQTT Configuration
+        const MQTT_BROKER = "broker.hivemq.com";
+        const MQTT_PORT = 8000; // WebSocket port
+        const MQTT_TOPIC_PUB = "esp32/control";
+        const MQTT_TOPIC_SUB = "esp32/data";
         
         let client;
-        let isConnected = false;
-        let reconnectAttempts = 0;
-        const MAX_RECONNECT_ATTEMPTS = 10;
+        let ledState = false;
         
-        // Update value displays
-        document.getElementById('speed').oninput = function() {
-            document.getElementById('speedValue').textContent = this.value;
-        };
+        // Generate random client ID
+        const clientId = "web_client_" + Math.random().toString(16).substr(2, 8);
         
-        document.getElementById('angle').oninput = function() {
-            document.getElementById('angleValue').textContent = this.value + '°';
-        };
+        // Create MQTT client
+        client = new Paho.MQTT.Client(MQTT_BROKER, MQTT_PORT, clientId);
+        
+        // Set callback handlers
+        client.onConnectionLost = onConnectionLost;
+        client.onMessageArrived = onMessageArrived;
         
         // Connect to MQTT broker
         function connectMQTT() {
-            addLog("Connecting to MQTT broker...");
-            updateStatus('connecting');
+            updateStatus("Connecting to MQTT...", "connecting");
             
-            try {
-                client = new Paho.MQTT.Client(MQTT_BROKER, MQTT_PORT, CLIENT_ID);
-                
-                client.onConnectionLost = onConnectionLost;
-                client.onMessageArrived = onMessageArrived;
-                
-                const connectOptions = {
-                    timeout: 10,
-                    onSuccess: onConnect,
-                    onFailure: onFailure,
-                    keepAliveInterval: 30,
-                    cleanSession: true
-                };
-                
-                client.connect(connectOptions);
-                
-            } catch (error) {
-                addLog("Error creating client: " + error.message);
-                updateStatus('disconnected');
-                scheduleReconnect();
-            }
+            client.connect({
+                onSuccess: onConnect,
+                onFailure: onFailure,
+                useSSL: false
+            });
         }
         
+        // Connection successful
         function onConnect() {
-            isConnected = true;
-            reconnectAttempts = 0;
-            updateStatus('connected');
-            enableButtons(true);
-            addLog("✓ Connected to MQTT broker");
+            console.log("Connected to MQTT broker");
+            updateStatus("Connected to MQTT Broker", "connected");
             
-            // Subscribe to status topic
-            try {
-                client.subscribe(TOPIC_STATUS);
-                addLog("✓ Subscribed to: " + TOPIC_STATUS);
-            } catch (error) {
-                addLog("Subscribe error: " + error.message);
-            }
+            // Subscribe to ESP32 data topic
+            client.subscribe(MQTT_TOPIC_SUB);
+            addMessage("Subscribed to " + MQTT_TOPIC_SUB);
         }
         
+        // Connection failed
         function onFailure(message) {
-            isConnected = false;
-            updateStatus('disconnected');
-            enableButtons(false);
-            
-            const errorMsg = message.errorMessage || "Unknown error";
-            addLog("✗ Connection failed: " + errorMsg);
-            
-            scheduleReconnect();
+            console.log("Connection failed: " + message.errorMessage);
+            updateStatus("Connection Failed. Retrying...", "disconnected");
+            setTimeout(connectMQTT, 3000);
         }
         
+        // Connection lost
         function onConnectionLost(responseObject) {
-            isConnected = false;
-            updateStatus('disconnected');
-            enableButtons(false);
-            
             if (responseObject.errorCode !== 0) {
-                addLog("✗ Connection lost: " + responseObject.errorMessage);
-            }
-            
-            scheduleReconnect();
-        }
-        
-        function scheduleReconnect() {
-            if (reconnectAttempts < MAX_RECONNECT_ATTEMPTS) {
-                reconnectAttempts++;
-                const delay = Math.min(5000 * reconnectAttempts, 30000);
-                addLog("Reconnecting in " + (delay/1000) + " seconds... (Attempt " + reconnectAttempts + "/" + MAX_RECONNECT_ATTEMPTS + ")");
-                setTimeout(connectMQTT, delay);
-            } else {
-                addLog("Max reconnection attempts reached. Please refresh the page.");
+                console.log("Connection lost: " + responseObject.errorMessage);
+                updateStatus("Connection Lost. Reconnecting...", "disconnected");
+                setTimeout(connectMQTT, 3000);
             }
         }
         
+        // Message received
         function onMessageArrived(message) {
-            const topic = message.destinationName;
-            const payload = message.payloadString;
-            
-            addLog("◄ Received: " + topic + " = " + payload);
-            
-            if (topic === TOPIC_STATUS) {
-                addLog("Device status: " + payload);
-            }
+            console.log("Message received: " + message.payloadString);
+            addMessage("Received: " + message.payloadString);
         }
         
+        // Send command to ESP32
         function sendCommand(command) {
-            if (!isConnected) {
-                addLog("✗ Not connected! Cannot send command.");
+            if (!client.isConnected()) {
+                alert("Not connected to MQTT broker!");
                 return;
             }
             
-            try {
-                const message = new Paho.MQTT.Message(command);
-                message.destinationName = TOPIC_COMMAND;
-                message.qos = 0;
-                client.send(message);
-                
-                addLog("► Sent command: " + command);
-            } catch (error) {
-                addLog("✗ Send error: " + error.message);
-            }
+            const message = new Paho.MQTT.Message(command);
+            message.destinationName = MQTT_TOPIC_PUB;
+            client.send(message);
+            
+            // Update LED display
+            ledState = (command === "ON");
+            updateLED(ledState);
+            
+            addMessage("Sent: " + command);
         }
         
-        function applySettings() {
-            if (!isConnected) {
-                addLog("✗ Not connected! Cannot apply settings.");
-                return;
-            }
-            
-            const speed = document.getElementById('speed').value;
-            const angle = document.getElementById('angle').value;
-            
-            const settings = {
-                speed: parseInt(speed),
-                angle: parseInt(angle)
-            };
-            
-            try {
-                const message = new Paho.MQTT.Message(JSON.stringify(settings));
-                message.destinationName = TOPIC_SETTINGS;
-                message.qos = 0;
-                client.send(message);
-                
-                addLog("► Applied settings: Speed=" + speed + ", Angle=" + angle);
-            } catch (error) {
-                addLog("✗ Send error: " + error.message);
-            }
-        }
-        
-        function updateStatus(status) {
-            const statusDiv = document.getElementById('status');
-            if (status === 'connected') {
-                statusDiv.textContent = '✓ Connected';
-                statusDiv.className = 'status connected';
-            } else if (status === 'connecting') {
-                statusDiv.textContent = '⟳ Connecting...';
-                statusDiv.className = 'status connecting';
+        // Update LED display
+        function updateLED(isOn) {
+            const led = document.getElementById("led");
+            if (isOn) {
+                led.classList.remove("off");
+                led.classList.add("on");
             } else {
-                statusDiv.textContent = '✗ Disconnected';
-                statusDiv.className = 'status disconnected';
+                led.classList.remove("on");
+                led.classList.add("off");
             }
         }
         
-        function enableButtons(enabled) {
-            document.getElementById('btnStart').disabled = !enabled;
-            document.getElementById('btnStop').disabled = !enabled;
-            document.getElementById('btnApply').disabled = !enabled;
+        // Update status display
+        function updateStatus(text, state) {
+            const status = document.getElementById("status");
+            status.textContent = text;
+            status.className = "status " + state;
         }
         
-        function addLog(message) {
-            const logContainer = document.getElementById('logContainer');
-            const timestamp = new Date().toLocaleTimeString();
-            const entry = document.createElement('div');
-            entry.className = 'log-entry';
-            entry.textContent = `[${timestamp}] ${message}`;
-            logContainer.insertBefore(entry, logContainer.firstChild);
+        // Add message to log
+        function addMessage(text) {
+            const messagesDiv = document.getElementById("messages");
+            const now = new Date();
+            const timeStr = now.toLocaleTimeString();
             
-            // Keep only last 20 entries
-            while (logContainer.children.length > 20) {
-                logContainer.removeChild(logContainer.lastChild);
+            const messageDiv = document.createElement("div");
+            messageDiv.className = "message";
+            messageDiv.innerHTML = `<span class="message-time">[${timeStr}]</span> ${text}`;
+            
+            messagesDiv.appendChild(messageDiv);
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            
+            // Keep only last 10 messages
+            while (messagesDiv.children.length > 10) {
+                messagesDiv.removeChild(messagesDiv.firstChild);
             }
         }
         
         // Connect on page load
-        window.onload = function() {
-            addLog("Page loaded. Initializing...");
-            enableButtons(false);
-            setTimeout(connectMQTT, 500);
-        };
-        
-        // Disconnect gracefully on page unload
-        window.onbeforeunload = function() {
-            if (isConnected && client) {
-                client.disconnect();
-            }
-        };
+        connectMQTT();
     </script>
 </body>
 </html>
